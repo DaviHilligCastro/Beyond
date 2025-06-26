@@ -161,8 +161,12 @@ class Logger:
     def log_message(beyond_devices):
         """
         """
+        if (not beyond_devices):
+            return "Nenhuma instância da Beyond foi encontrada no projeto."
+
         faulty_devices  = []
         working_devices = []
+        
         for device in beyond_devices:
             log_issues = (" - " if device.issue_flag else "") + " / ".join(device.issues)
             log_entry = f"{device.device_id} - Id {device.revit_element_id}"
@@ -220,8 +224,10 @@ class ElectricalData(ElectricalDataDelivery):
             "number_of_poles" : BuiltInParameter.RBS_ELEC_NUMBER_OF_POLES,
             "apparent_load"   : BuiltInParameter.RBS_ELEC_APPARENT_LOAD
         }
+        
         built_in_parameter = parameters_dic.get(parameter_key)
         parameter_value = self.mep_connector_info.GetConnectorParameterValue(ElementId(built_in_parameter)).Value
+        
         if parameter_value == None:
             return None
         
@@ -233,8 +239,10 @@ class ElectricalData(ElectricalDataDelivery):
             "circuit_number" : BuiltInParameter.RBS_ELEC_CIRCUIT_NUMBER,
             "switch_id"      : BuiltInParameter.RBS_ELEC_SWITCH_ID_PARAM
         }
+        
         built_in_parameter = parameters_dic.get(parameter_key)
         parameter_value = ParameterService.get_parameter_value(self.family_instance.get_Parameter(built_in_parameter))
+        
         if parameter_value == "" or parameter_value == None:
             return "Nulo"
         
