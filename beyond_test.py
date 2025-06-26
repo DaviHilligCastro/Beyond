@@ -6,8 +6,8 @@ Uso:
     Rotina Dynamo - beyond_verification.dyn.
 
 Saída:
-    Retorna as informações do teste em um log de mensagens (aquivo de texto)
-    gravado na mesma pasta do projeto Revit.
+    Retorna as informações do teste em um log de texto
+    gravado na raiz do projeto Revit.
 
 Requisitos:
     - CPython3;
@@ -161,8 +161,8 @@ class Logger:
     def log_message(beyond_devices):
         """
         """
-        if (not beyond_devices):
-            return "Nenhuma instância da Beyond foi encontrada no projeto."
+        if beyond_devices == None:
+            return "Não há famílias Beyond instaladas no projeto."
 
         faulty_devices  = []
         working_devices = []
@@ -185,7 +185,6 @@ class Logger:
 
 class ElectricalData(ElectricalDataDelivery):
     """
-    Implementa a classe abstrata ElectricalDataDelivery.
     Classe Relacionada a obtenção de parâmetros ElectricDomain no modelo Revit
     """
     def __init__(self, family_instance):
@@ -473,6 +472,10 @@ class BeyondService:
         key = [channel.panel, channel.circuit_number, channel.switch_id]
         error_messages = ["Nulo", "Divergência no painel", "Divergência no circuito", "Desconectado"]
 
+        if load_mapping == None:
+            channel.apparent_load = 0
+            return
+        
         for error_type in error_messages:
             if any(e == error_type for e in key): 
                 channel.apparent_load = 0
@@ -494,18 +497,20 @@ class BeyondService:
        
     def _get_space(self):
         """
-        Retorna o Espaço associado a uma instância de família.
+        Obtém o Espaço associado a uma instância de família.
         Returns:
-            space_name(string): O Espaço associado.
+            Autodesk.Revit.DB.Mechanical.Space: O Espaço, se houver.
         """
         space = self.instance.family_instance.Space
         if space is not None:
             return space
             
         location = self.instance.family_instance.Location
+        
         if isinstance(location, LocationPoint):
             space = doc.GetSpaceAtPoint(location.Point)
             return space
+        
         return None
 
     def _get_room(self):
@@ -531,7 +536,7 @@ class BeyondService:
             valid_value(string): O nome do Espaço, Ambiente ou Mensagem indicaiva de valor Nulo.
         """
         space = self._get_space()
-        if space != None and space != "":
+        if space != None:
             space_name = space.get_Parameter(BuiltInParameter.SPACE_NAME_PARAM)
             if space_name:
                 return space_name.AsString()
@@ -584,7 +589,7 @@ class BeyondDevice():
         """
         Gera o identificador único interno
         Returns:
-            device_id(string): Identificador beyond para cada dispositivo instalado no modelo
+            device_id(string): Identificador beyond para cada dispositivo
         """       
         if BeyondDevice.count_devices <= 9:
             return "BDO" + str (BeyondDevice.count_devices)
@@ -716,33 +721,31 @@ lighting_fixtures_collector = FilteredElementCollector(doc).OfCategory(BuiltInCa
 
 #===================================================================================================================
 #LIGHTING FIXTURES
-lighting_fixtures = LightingFactory.create_lighting_fixtures(lighting_fixtures_collector)
-apparent_load_mapping = LightingFactory.get_apparent_load_by_switch_id(lighting_fixtures)
+try:
+    if lighting_fixtures_collector is not []:
+        lighting_fixtures = LightingFactory.create_lighting_fixtures(lighting_fixtures_collector)
+        apparent_load_mapping = LightingFactory.get_apparent_load_by_switch_id(lighting_fixtures)
+except:
+    apparent_load_mapping = None
 
 #===================================================================================================================
-#BEYOND FACTORY
+#BEYOND
 beyond_families = list(filter(lambda x : x.Name == ("ONE.Black") or x.Name == ("ONE.White") or x.Name == ("POWER.Black") or x.Name == ("POWER.White"), electrical_fixtures_collector))
-beyond_objects = BeyondFactory.create_devices(beyond_families, apparent_load_mapping)
+try:
+    if beyond_families != []:
 
-#DEBUG
-index = IN[0]
-bd_obj = beyond_objects[index]
-beyond_properties = [bd_obj.service, bd_obj.family_instance,   bd_obj.name,   bd_obj.revit_element_id,   bd_obj.device_id,   bd_obj.panel,   bd_obj.circuit_number,   bd_obj.voltage, 
-                     bd_obj.number_of_poles,   bd_obj.grouped_switch_id,   bd_obj.issue_flag,   bd_obj.issues,   bd_obj.space_or_room,
-                     bd_obj.dock_station,      [bd_obj.dock_station.panel,   bd_obj.dock_station.circuit_number,   bd_obj.dock_station.voltage,   bd_obj.dock_station.apparent_load,   bd_obj.dock_station.number_of_poles], 
-                     bd_obj.output_channel_1,  [bd_obj.output_channel_1.panel,   bd_obj.output_channel_1.circuit_number,   bd_obj.output_channel_1.switch_id,   bd_obj.output_channel_1.apparent_load], 
-                     bd_obj.output_channel_2,  [bd_obj.output_channel_2.panel,   bd_obj.output_channel_2.circuit_number,   bd_obj.output_channel_2.switch_id,   bd_obj.output_channel_2.apparent_load], 
-                     bd_obj.output_channel_3,  [bd_obj.output_channel_3.panel,   bd_obj.output_channel_3.circuit_number,   bd_obj.output_channel_3.switch_id,   bd_obj.output_channel_3.apparent_load]
-                     ]
+        beyond_objects = BeyondFactory.create_devices(beyond_families, apparent_load_mapping)
+        
+        #SET BEYOND FAMILY PARAMETERS
+        t = Transaction(doc, "Set Beyond parameters")
+        t.Start()
+        for device in beyond_objects:
+            setter = BeyondParameterSetter(device)
+            setter.set_family_parameters()
+        t.Commit()
 
-#===================================================================================================================
-#SET BEYOND FAMILY PARAMETERS
-t = Transaction(doc, "Set Beyond parameters")
-t.Start()
-for device in beyond_objects:
-    setter = BeyondParameterSetter(device)
-    setter.set_family_parameters()
-t.Commit()
+except:
+    beyond_objects = None
 
 #===================================================================================================================
 #Write to log
@@ -751,4 +754,4 @@ log_message = Logger.log_message(beyond_objects)
 log.write_to_log(log_message)
 
 #===================================================================================================================
-OUT = beyond_objects
+OUT = [beyond_objects]
