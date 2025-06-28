@@ -490,34 +490,29 @@ class BeyondService:
         Args:
             channel_number : 1 || 2 || 3.
         """
-        if channel_number == 1: channel = self.instance.output_channel_1
-        if channel_number == 2: channel = self.instance.output_channel_2
-        if channel_number == 3: channel = self.instance.output_channel_3
-        
+        channels = {
+            1: self.instance.output_channel_1,
+            2: self.instance.output_channel_2,
+            3: self.instance.output_channel_3
+        }
+        channel = channels.get(channel_number)
         apparent_load = channel.electrical_data.convert_to_watts(channel.apparent_load)
         switch_id = channel.switch_id
-        channel_name = str(channel)
-        
         message = []
 
         if switch_id == "Nulo":
-            if message == []:
-                message.append(f"{channel_name}")
             message.append("ID não atribuído")
 
         if switch_id != "Nulo" and apparent_load == 0:
-            if message == []:
-                message.append(f"{channel_name}")
             message.append(f"ID({switch_id}) carga nula")
 
         if apparent_load > 100:
-            if message == []:
-                message.append(f"{channel_name}:")
             message.append(f"ID({switch_id}) {apparent_load}VA")
 
-        if message != []:
+        if message:
+            channel_name = str(channel)
+            message.insert(0, f"{channel_name}:")
             self.instance.issues.append(" ".join(message))
-            return
 
     def check_dock_station_load(self):
         """
@@ -539,20 +534,21 @@ class BeyondService:
             channel_number : 1 || 2 || 3;
             lighting_load_mapping : valor retornado por get_apparent_load_by_switch_id(light_objects).
         """
-        channel = None
-        if channel_number == 1: channel = self.instance.output_channel_1
-        if channel_number == 2: channel = self.instance.output_channel_2
-        if channel_number == 3: channel = self.instance.output_channel_3
-        
+        channels = {
+            1: self.instance.output_channel_1,
+            2: self.instance.output_channel_2,
+            3: self.instance.output_channel_3
+        }
+        channel = channels.get(channel_number)
         key = [channel.panel, channel.circuit_number, channel.switch_id]
-        error_messages = ["Nulo", "Divergência no painel", "Divergência no circuito", "Desconectado"]
+        error_values = ["Nulo", "Divergência no painel", "Divergência no circuito", "Desconectado"]
 
         if not lighting_load_mapping:
             channel.apparent_load = 0
             return
         
-        for error_type in error_messages:
-            if any(e == error_type for e in key): 
+        for error in error_values:
+            if any(e == error for e in key): 
                 channel.apparent_load = 0
                 return
 
