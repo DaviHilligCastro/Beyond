@@ -52,10 +52,10 @@ from Autodesk.Revit.DB import *
 from Autodesk.Revit.UI import *
 
 #===================================================================================================================
-#==========================         ABSTRACT CLASSES          ======================================================
+#==========================         INTERFACES          ============================================================
 #===================================================================================================================
 
-class ElectricalDataDelivery(ABC):
+class ElectricalDataAcessor(ABC):
     @abstractmethod
     def _get_electrical_connector(self):
         pass
@@ -81,10 +81,124 @@ class ElectricalDataDelivery(ABC):
         pass
 
 #===================================================================================================================
-#==========================         IO COMPONENT - COMPONENTE DE SAÍDAS          ===================================
+#==========================         INFRASTRUCTURE          ========================================================
 #===================================================================================================================
 
-class BeyondParameterSetter():
+class ElectricalData(ElectricalDataAcessor):
+    """
+    Relacionada a obtenção de parâmetros ElectricDomain no modelo Revit
+    """
+    def __init__(self, family_instance):
+        """
+        Define uma instância de ElectricalData para cada instância
+        de BeyondDevice()
+        """
+        self.family_instance = family_instance
+        self.mep_connector_info = self._get_mep_connector_info()
+    
+    def _get_electrical_connector(self):
+        """
+        Obtém o conector elétrico de uma família assumindo que a mesma possua apenas um 
+        conector de domínio elétrico.
+        Returns:
+            electrical_connector: Dentre os vários tipos de conectores que uma família 
+            pode possuir, retornará apenas o primeiro conector de domínio elétrico encontrado.
+        """
+        mep_model = self.family_instance.MEPModel
+        if not mep_model: return None
+        
+        connector_manager = mep_model.ConnectorManager
+        connector_set = connector_manager.Connectors
+        connector_iterator = connector_set.ForwardIterator()
+        
+        while connector_iterator.MoveNext():
+            connector = connector_iterator.Current
+            
+            if connector.Domain == Domain.DomainElectrical: 
+                return connector
+        
+        return None
+        
+    def _get_mep_connector_info(self):
+        """
+        Obtém o MEPConnectorInfo para um dado conector elétrico.
+        """
+        connector = self._get_electrical_connector()
+        mep_connector_info = connector.GetMEPConnectorInfo() if connector else None
+        
+        return mep_connector_info
+
+    def get_connector_parameter_value(self, parameter_key):
+        """
+        Obtém o valor de parâmetro do conector elétrico, valores
+        None são aceitos e tratados um nível acima, por quem 
+        instanciar ElectricalData.
+        Args:
+            parameter_key -> 'voltage' || 'number_of_poles' || 'apparent_load'
+        Returns:
+            O valor associado ao parâmetro ou None caso não houver.
+        """
+        parameters_dic = {
+            "voltage"         : BuiltInParameter.RBS_ELEC_VOLTAGE,
+            "number_of_poles" : BuiltInParameter.RBS_ELEC_NUMBER_OF_POLES,
+            "apparent_load"   : BuiltInParameter.RBS_ELEC_APPARENT_LOAD
+        }
+        
+        built_in_parameter = parameters_dic.get(parameter_key)
+        parameter_value = self.mep_connector_info.GetConnectorParameterValue(ElementId(built_in_parameter)).Value
+        
+        if not parameter_value:
+            return None
+
+        return parameter_value
+    
+    def get_family_parameter_value(self, parameter_key):
+        """
+        Obtém o valor de parâmetro diretamente da família, valores
+        None são aceitos, tratados e reportados com o valor 'Nulo'.
+        Args:
+            parameter_key -> 'panel' || 'circuit_number' || 'switch_id'
+        Returns:
+            O valor associado ao parâmetro ou string 'Nulo' caso não houver.
+        """
+        parameters_dic = {
+            "panel"          : BuiltInParameter.RBS_ELEC_CIRCUIT_PANEL_PARAM,
+            "circuit_number" : BuiltInParameter.RBS_ELEC_CIRCUIT_NUMBER,
+            "switch_id"      : BuiltInParameter.RBS_ELEC_SWITCH_ID_PARAM
+        }
+        
+        built_in_parameter = parameters_dic.get(parameter_key)
+        parameter_value = self.family_instance.get_Parameter(built_in_parameter).AsString()
+        
+        if not parameter_value or parameter_value == "":
+            return "Nulo"
+        
+        return parameter_value
+
+    def convert_to_volts(self, internal_value):
+        """
+        Converte valores internos do Revit de potencial elétrico para Volts.
+        Args:
+            Valor de potencial elétrico em unidade interna do Revit.
+        Returns:
+            Valor em Volts.
+        """
+        volts_value = UnitUtils.ConvertFromInternalUnits(internal_value, UnitTypeId.Volts)
+        return round(volts_value, 0)
+        
+    def convert_to_watts(self, internal_value):
+        """
+        Converte valores internos do Revit de carga aparente para Watts.
+        Args:
+            Valor da carga em unidade interna do Revit.
+        Returns:
+            Valor em Watts.
+        """
+        watts_value = UnitUtils.ConvertFromInternalUnits(internal_value, UnitTypeId.Watts)
+        return round(watts_value, 0)
+    
+
+class BeyondParameterWriter():
     """
     Responsável por escrever os valores nos parâmetros
     de famílias da Beyond
@@ -193,164 +307,21 @@ class Logger:
             + "Dispositivo(s) com problemas de instalação elétrica no projeto:\n"
             + "\n".join(faulty_devices)
             )
-        
+
 #===================================================================================================================
-#==========================         IO COMPONENT - COMPONENTE DE ENTRADAS          =================================
-#===================================================================================================================
-
-class ElectricalData(ElectricalDataDelivery):
-    """
-    Relacionada a obtenção de parâmetros ElectricDomain no modelo Revit
-    """
-    def __init__(self, family_instance):
-        """
-        Define uma instância de ElectricalData para cada instância
-        de BeyondDevice()
-        """
-        self.family_instance = family_instance
-        self.mep_connector_info = self._get_mep_connector_info()
-    
-    def _get_electrical_connector(self):
-        """
-        Obtém o conector elétrico de uma família assumindo que a mesma possua apenas um 
-        conector de domínio elétrico.
-        Returns:
-            electrical_connector: Dentre os vários tipos de conectores que uma família 
-            pode possuir, retornará apenas o primeiro conector de domínio elétrico encontrado.
-        """
-        mep_model = self.family_instance.MEPModel
-        if not mep_model: return None
-        
-        connector_manager = mep_model.ConnectorManager
-        connector_set = connector_manager.Connectors
-        connector_iterator = connector_set.ForwardIterator()
-        
-        while connector_iterator.MoveNext():
-            connector = connector_iterator.Current
-            
-            if connector.Domain == Domain.DomainElectrical: 
-                return connector
-        
-        return None
-        
-    def _get_mep_connector_info(self):
-        """
-        Obtém o MEPConnectorInfo para um dado conector elétrico.
-        """
-        connector = self._get_electrical_connector()
-        mep_connector_info = connector.GetMEPConnectorInfo() if connector else None
-        
-        return mep_connector_info
-
-    def get_connector_parameter_value(self, parameter_key):
-        """
-        Obtém o valor de parâmetro do conector elétrico, valores
-        None são aceitos e tratados um nível acima, por quem 
-        instanciar ElectricalData.
-        Args:
-            parameter_key -> 'voltage' || 'number_of_poles' || 'apparent_load'
-        Returns:
-            O valor associado ao parâmetro ou None caso não houver.
-        """
-        parameters_dic = {
-            "voltage"         : BuiltInParameter.RBS_ELEC_VOLTAGE,
-            "number_of_poles" : BuiltInParameter.RBS_ELEC_NUMBER_OF_POLES,
-            "apparent_load"   : BuiltInParameter.RBS_ELEC_APPARENT_LOAD
-        }
-        
-        built_in_parameter = parameters_dic.get(parameter_key)
-        parameter_value = self.mep_connector_info.GetConnectorParameterValue(ElementId(built_in_parameter)).Value
-        
-        if not parameter_value:
-            return None
-
-        return parameter_value
-    
-    def get_family_parameter_value(self, parameter_key):
-        """
-        Obtém o valor de parâmetro diretamente da família, valores
-        None são aceitos, tratados e reportados com o valor 'Nulo'.
-        Args:
-            parameter_key -> 'panel' || 'circuit_number' || 'switch_id'
-        Returns:
-            O valor associado ao parâmetro ou string 'Nulo' caso não houver.
-        """
-        parameters_dic = {
-            "panel"          : BuiltInParameter.RBS_ELEC_CIRCUIT_PANEL_PARAM,
-            "circuit_number" : BuiltInParameter.RBS_ELEC_CIRCUIT_NUMBER,
-            "switch_id"      : BuiltInParameter.RBS_ELEC_SWITCH_ID_PARAM
-        }
-        
-        built_in_parameter = parameters_dic.get(parameter_key)
-        parameter_value = ParameterService.get_parameter_value(self.family_instance.get_Parameter(built_in_parameter))
-        
-        if not parameter_value or parameter_value == "":
-            return "Nulo"
-        
-        return parameter_value
-
-    def convert_to_volts(self, internal_value):
-        """
-        Converte valores internos do Revit de potencial elétrico para Volts.
-        Args:
-            Valor de potencial elétrico em unidade interna do Revit.
-        Returns:
-            Valor em Volts.
-        """
-        volts_value = UnitUtils.ConvertFromInternalUnits(internal_value, UnitTypeId.Volts)
-        return round(volts_value, 0)
-        
-    def convert_to_watts(self, internal_value):
-        """
-        Converte valores internos do Revit de carga aparente para Watts.
-        Args:
-            Valor da carga em unidade interna do Revit.
-        Returns:
-            Valor em Watts.
-        """
-        watts_value = UnitUtils.ConvertFromInternalUnits(internal_value, UnitTypeId.Watts)
-        return round(watts_value, 0)
-
-
-class ParameterService:
-
-    def get_parameter_value(parameter):
-        """
-        Recupera o valor do objeto parâmetro de acordo com o StorageType.
-        Args:
-            parameter: Parâmetro Revit
-        Returns:
-            Parameter Value
-        """
-        value = None
-        if parameter.StorageType == StorageType.Double:
-            value = parameter.AsDouble()
-        elif parameter.StorageType == StorageType.Integer:
-            if parameter.Definition.ParameterType == ParameterType.Integer:
-                value = parameter.AsInteger()
-            else:     
-                value = parameter.AsValueString()
-        elif parameter.StorageType == StorageType.String:
-            value = parameter.AsString()
-        elif parameter.StorageType == StorageType.ElementId:
-            value = parameter.AsElementId()
-        
-        return value
-    
-#===================================================================================================================
-#==========================         USE  C A S E 1        ==========================================================
+#==========================         APPLICATION SERVICE        =====================================================
 #===================================================================================================================
 
 class LightingFixture:
     """
     Classe relativa às luminárias presentes no Modelo.
     """
-    def __init__(self, lighting_fixture, electrical_data: ElectricalDataDelivery):
+    def __init__(self, lighting_fixture, electrical_data: ElectricalDataAcessor):
         """
         Define um objeto para cada luminária instalada no projeto.
         Args:
             lighting_fixture : ElementType= FamilyInstance, Category= Lighting Fixture;
-            electrical_data : Injeção do objeto que implementa ElectricalDataDelivery.
+            electrical_data : Injeção do objeto que implementa ElectricalDataAcessor.
         """
         self.family_instance = lighting_fixture
         self.electrical_data = electrical_data
@@ -390,35 +361,8 @@ class LightingService:
 
         return load_mapping
 
-
-class LightingFactory:
-    
-    @staticmethod
-    def create_lighting_fixtures(lighting_fixtures_collector):
-        """
-        Contém a logica para criar os Objetos de LightingFixture.
-        Args:
-            lighting_fixtures_collector: Lista contendo instâncias de famílias de luminária
-        Returns:
-            Retorna uma lista de objetos LightingFixture
-        """
-        light_objects = []
-
-        for family_instance in lighting_fixtures_collector:
-
-            electrical_data = ElectricalData(family_instance)
-            light_fixture = LightingFixture(family_instance, electrical_data)
-            light_objects.append(light_fixture)
-
-        return light_objects
-        
-    @staticmethod
-    def get_apparent_load_by_switch_id(light_objects):
-        
-        return LightingService.sum_apparent_load_by_switch_id(light_objects)
-
 #===================================================================================================================
-#==========================         B E Y O N D  BUSINESS RULES          ===========================================
+#==========================         DOMAIN SERVICE           =======================================================
 #===================================================================================================================
 
 class BeyondService:
@@ -621,7 +565,7 @@ class BeyondService:
         return "Espaço ou Ambiente não atribuído"
 
 #===================================================================================================================
-#==========================         B E Y O N D  ENTITY          ===================================================
+#==========================         ENTITY          ================================================================
 #===================================================================================================================
 
 class BeyondDevice():
@@ -733,7 +677,7 @@ class DockStation:
     """
     Classe relativa ao dispositivo Base Beyond.
     """
-    def __init__(self, dock_station_family, electrical_data: ElectricalDataDelivery):
+    def __init__(self, dock_station_family, electrical_data: ElectricalDataAcessor):
 
         self.family_instance = dock_station_family
         self.electrical_data = electrical_data
@@ -752,7 +696,7 @@ class OutputChannel:
     """
     Classe relativa às Saídas/Canais de iluminação Beyond.
     """
-    def __init__(self, output_channel_family, electrical_data: ElectricalDataDelivery):
+    def __init__(self, output_channel_family, electrical_data: ElectricalDataAcessor):
 
         self.family_instance = output_channel_family
         self.electrical_data = electrical_data
@@ -764,6 +708,36 @@ class OutputChannel:
     def __str__(self):
 
         return f"{self.family_instance.Name}"
+
+#===================================================================================================================
+#==========================         FACTORY          ===============================================================
+#===================================================================================================================
+
+class LightingFactory:
+    
+    @staticmethod
+    def create_lighting_fixtures(lighting_fixtures_collector):
+        """
+        Contém a logica para criar os Objetos de LightingFixture.
+        Args:
+            lighting_fixtures_collector: Lista contendo instâncias de famílias de luminária
+        Returns:
+            Retorna uma lista de objetos LightingFixture
+        """
+        light_objects = []
+
+        for family_instance in lighting_fixtures_collector:
+
+            electrical_data = ElectricalData(family_instance)
+            light_fixture = LightingFixture(family_instance, electrical_data)
+            light_objects.append(light_fixture)
+
+        return light_objects
+        
+    @staticmethod
+    def get_apparent_load_by_switch_id(light_objects):
+        
+        return LightingService.sum_apparent_load_by_switch_id(light_objects)
 
 
 class BeyondFactory():
@@ -814,13 +788,12 @@ if electrical_fixtures_collector:
     if beyond_families:
 
         beyond_objects = BeyondFactory.create_devices(beyond_families, apparent_load_mapping)
-            
-        #SET BEYOND FAMILY PARAMETERS
+
         t = Transaction(doc, "Verificação de famílias Beyond")
         t.Start()
         for device in beyond_objects:
 
-            setter = BeyondParameterSetter(device)
+            setter = BeyondParameterWriter(device)
             setter.set_family_parameters()
 
         t.Commit()
@@ -834,4 +807,4 @@ log_message = Logger.log_message(beyond_objects)
 log.write_to_log(log_message)
 
 #===================================================================================================================
-OUT = [beyond_objects]
+OUT = [beyond_objects, lighting_fixtures]

@@ -1,0 +1,105 @@
+@startuml classes_beyond_uml
+set namespaceSeparator none
+class "BeyondDevice" as beyond_revit_automation.BeyondDevice {
+  circuit_number : NoneType
+  count_devices : int
+  device_id
+  dock_station : NoneType
+  family_instance
+  grouped_switch_id : NoneType, str
+  issue_flag : bool
+  issues : list
+  name
+  number_of_poles : NoneType
+  output_channel_1 : NoneType
+  output_channel_2 : NoneType
+  output_channel_3 : NoneType
+  panel : NoneType
+  revit_element_id
+  service
+  space_or_room : NoneType, str
+  voltage : NoneType
+  device_id()
+  get_nested_families(nested_family_name)
+  initialize_components(lighting_load_mapping)
+}
+class "BeyondFactory" as beyond_revit_automation.BeyondFactory {
+  create_devices(lighting_load_mapping)
+}
+class "BeyondParameterWriter" as beyond_revit_automation.BeyondParameterWriter {
+  beyond
+  set_family_parameters()
+}
+class "BeyondService" as beyond_revit_automation.BeyondService {
+  instance
+  assign_apparent_load_to_channel(channel_number, lighting_load_mapping)
+  check_device_circuit()
+  check_device_panel()
+  check_dock_station_load()
+  check_output_channel_load(channel_number)
+  get_space_or_room()
+  group_switch_ids()
+  set_issue_flag()
+}
+class "DockStation" as beyond_revit_automation.DockStation {
+  apparent_load
+  circuit_number
+  electrical_data
+  family_instance
+  number_of_poles
+  panel
+  voltage
+}
+class "ElectricalData" as beyond_revit_automation.ElectricalData {
+  family_instance
+  mep_connector_info : NoneType
+  convert_to_volts(internal_value)
+  convert_to_watts(internal_value)
+  get_connector_parameter_value(parameter_key)
+  get_family_parameter_value(parameter_key)
+}
+class "ElectricalDataAcessor" as beyond_revit_automation.ElectricalDataAcessor {
+  {abstract}convert_to_volts(internal_value)
+  {abstract}convert_to_watts(internal_value)
+  {abstract}get_connector_parameter_value(parameter_key, mep_connector_info)
+  {abstract}get_family_parameter_value(parameter_key)
+}
+class "LightingFactory" as beyond_revit_automation.LightingFactory {
+  create_lighting_fixtures(lighting_fixtures_collector)
+  get_apparent_load_by_switch_id(light_objects)
+}
+class "LightingFixture" as beyond_revit_automation.LightingFixture {
+  apparent_load
+  circuit_number
+  electrical_data
+  family_instance
+  panel
+  switch_id
+}
+class "LightingService" as beyond_revit_automation.LightingService {
+  sum_apparent_load_by_switch_id(lighting_objects_list)
+}
+class "Logger" as beyond_revit_automation.Logger {
+  log_file_name
+  log_file_path
+  log_message(beyond_devices)
+  write_to_log(message)
+}
+class "OutputChannel" as beyond_revit_automation.OutputChannel {
+  apparent_load : int
+  circuit_number
+  electrical_data
+  family_instance
+  panel
+  switch_id
+}
+beyond_revit_automation.ElectricalData --|> beyond_revit_automation.ElectricalDataAcessor
+beyond_revit_automation.BeyondService --* beyond_revit_automation.BeyondDevice : service
+beyond_revit_automation.DockStation --* beyond_revit_automation.BeyondDevice : dock_station
+beyond_revit_automation.OutputChannel --* beyond_revit_automation.BeyondDevice : output_channel_1
+beyond_revit_automation.OutputChannel --* beyond_revit_automation.BeyondDevice : output_channel_2
+beyond_revit_automation.OutputChannel --* beyond_revit_automation.BeyondDevice : output_channel_3
+beyond_revit_automation.ElectricalDataAcessor --o beyond_revit_automation.DockStation : electrical_data
+beyond_revit_automation.ElectricalDataAcessor --o beyond_revit_automation.LightingFixture : electrical_data
+beyond_revit_automation.ElectricalDataAcessor --o beyond_revit_automation.OutputChannel : electrical_data
+@enduml
