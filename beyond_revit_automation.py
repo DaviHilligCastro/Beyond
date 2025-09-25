@@ -1,29 +1,36 @@
 """
-O script busca as famílias Revit (.rfa) da Beyond Domotics
-em um projeto MEP e executa bateria de testes.
+Beyond Revit Family Verification
+================================
 
-Uso:
-    Rotina Dynamo - beyond_verification.dyn.
+Executes a test suite on electrical Revit families for beyond.dm products.
 
-Saída:
-    Retorna as informações do teste em um log de texto
-    gravado na raiz do projeto Revit.
+Executa uma suíte de testes nas famílias elétricas de Revit para produtos beyond.dm.
 
-Requisitos:
-    - CPython3;
-    - Revit 2025.
+Usage / Uso:
+    Dynamo Graph: beyond_verification.dyn
+
+Output / Saída:
+    Text log written to the Revit project root / Log de texto gravado na raiz do projeto Revit.
+
+Requirements / Requisitos:
+    - CPython 3.x
+    - Autodesk Revit 2025.2
+    - Dynamo Core 3.2.1
+
+Dependencies / Dependências:
+    - Revit API
+    - Beyond Revit Families
 """
+
 __title__ = "Beyond Revit Family Verification"
-__description__ = "Performs a test suite on electrical Revit Families for beyond.dm products"
+__description__ = "Test suite for electrical Revit families (beyond.dm)"
 __version__ = "1.0.0"
-__status__ = "Development" 
+__status__ = "Development"
 __license__ = "MIT"
 __date__ = "2025-06-25"
-__updated__ = ""
 __author__ = "Davi Hillig Castro"
 __email__ = "davihillig@gmail.com"
-__maintainer__ = "Davi Hillig Castro"
-__url__ = ""
+__url__ = "https://tecnika.vercel.app/estudo-de-caso-beyond.html"
 
 #===================================================================================================================
 #==========================         IMPORTS          ===============================================================
