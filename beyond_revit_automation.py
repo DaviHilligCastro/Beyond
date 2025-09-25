@@ -1,10 +1,10 @@
 """
-Beyond Revit Family Verification
-================================
+Beyond Revit Family Automation
+==============================
 
 Executes a test suite on electrical Revit families for beyond.dm products.
 
-Executa uma suíte de testes nas famílias elétricas de Revit para produtos beyond.dm.
+Executa um conjunto de testes nas famílias para Revit dos produtos da beyond.dm.
 
 Usage / Uso:
     Dynamo Graph: beyond_verification.dyn
@@ -22,7 +22,7 @@ Dependencies / Dependências:
     - Beyond Revit Families
 """
 
-__title__ = "Beyond Revit Family Verification"
+__title__ = "Beyond Revit Family Automation"
 __description__ = "Test suite for electrical Revit families (beyond.dm)"
 __version__ = "1.0.0"
 __status__ = "Development"
